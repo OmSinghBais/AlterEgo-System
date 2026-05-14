@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+memory.db
+audio/
+logs/
+data/
+temp_*.wav
+temp_*.mp3
+output.mp3

@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+venv/
+
+# Next.js
+.next/
+out/
+
+# Python
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite3
+
+# Build
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# AI Models
+models/
+checkpoints/
+
+# Cache
+.cache/
+
+# Audio
+*.wav
+*.mp3
+
+# TypeScript
+tsconfig.tsbuildinfo
