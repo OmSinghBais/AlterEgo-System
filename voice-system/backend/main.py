@@ -27,9 +27,12 @@ async def lifespan(app: FastAPI):
     # Start telemetry bridge
     asyncio.create_task(telemetry_bridge())
 
-    # Start wake word thread
-    from main_utils import start_wakeword_thread
-    start_wakeword_thread()
+    # Start wake word thread (only if enabled)
+    if settings.ENABLE_WAKEWORD:
+        from main_utils import start_wakeword_thread
+        start_wakeword_thread()
+    else:
+        logger.info("🎙️ Wake-word listener disabled (Cloud Mode).")
 
     logger.info("✅ All systems online.")
     yield
@@ -51,6 +54,15 @@ app.add_middleware(
 )
 
 # Routes
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "system": "AlterEGO AI",
+        "environment": settings.ENVIRONMENT,
+        "version": app.version
+    }
+
 app.include_router(api_router, prefix="/api")
 
 @app.websocket("/ws/voice")

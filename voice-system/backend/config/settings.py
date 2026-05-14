@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
     
     # Infrastructure
-    REDIS_URL: str = "redis://localhost:6379"
-    DATABASE_URL: str = "sqlite:///./alterego.db"
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./alterego.db")
+    ENABLE_WAKEWORD: bool = os.getenv("ENABLE_WAKEWORD", "False").lower() == "true"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
     
     # WebSocket
     WS_HOST: str = "0.0.0.0"
