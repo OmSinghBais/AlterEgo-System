@@ -52,3 +52,7 @@ class ReflectionEngine:
         pass
 
 reflection_engine = ReflectionEngine()
+
+async def start_reflection_loop():
+    """Trigger the reflection cycle asynchronously."""
+    asyncio.create_task(reflection_engine.run_reflection_cycle())
