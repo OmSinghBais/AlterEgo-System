@@ -94,24 +94,22 @@ export default function AssistantOrb() {
         <AnimatePresence>
           {mode === "thinking" && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ opacity: 0, scale: 0.8, rotate: 0 }}
+              animate={{ opacity: 1, scale: 1, rotate: 360 }}
               exit={{ opacity: 0, scale: 1.2 }}
               className="absolute inset-[-20px] rounded-full border-2 border-dashed border-purple-500/40"
-              animate={{ rotate: 360 }}
               transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
             />
           )}
           {mode === "listening" && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1.1 }}
-              exit={{ opacity: 0, scale: 1.5 }}
-              className="absolute inset-[-40px] rounded-full border border-cyan-400/30"
               animate={{ 
                 scale: [1, 1.2, 1],
                 opacity: [0.2, 0.5, 0.2]
               }}
+              exit={{ opacity: 0, scale: 1.5 }}
+              className="absolute inset-[-40px] rounded-full border border-cyan-400/30"
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
             />
           )}
