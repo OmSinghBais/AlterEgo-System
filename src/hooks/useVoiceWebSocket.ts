@@ -252,7 +252,7 @@ export function useVoiceWebSocket() {
     connect();
     return () => disconnect();
   }, [connect, disconnect]);
-
+  return {
     socketState,
     lastMessage,
     connect,
