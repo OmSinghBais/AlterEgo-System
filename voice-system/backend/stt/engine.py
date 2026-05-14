@@ -23,6 +23,10 @@ def get_whisper_model():
         )
     return _whisper_model
 
+def get_model():
+    """Alias for get_whisper_model for backward compatibility."""
+    return get_whisper_model()
+
 def get_deepgram_client():
     global _deepgram_client
     if _deepgram_client is None:
