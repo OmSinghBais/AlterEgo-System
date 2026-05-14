@@ -84,7 +84,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app", 
         host=settings.WS_HOST, 
-        port=settings.WS_PORT, 
-        reload=True,
+        port=settings.PORT or settings.WS_PORT, 
+        reload=False, # Disable reload in production
         workers=1 # Using 1 worker for websocket stability in dev
     )

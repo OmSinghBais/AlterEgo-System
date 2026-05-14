@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Optional
 import os
 
 class Settings(BaseSettings):
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     # WebSocket
     WS_HOST: str = "0.0.0.0"
     WS_PORT: int = 8000
+    PORT: Optional[int] = None # Added for cloud environments like Railway
     
     # Personality
     DEFAULT_PERSONALITY: str = "jarvis"
