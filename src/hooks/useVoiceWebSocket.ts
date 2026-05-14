@@ -17,6 +17,7 @@ export type VoiceSocketState =
 export function useVoiceWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const [socketState, setSocketState] = useState<VoiceSocketState>("disconnected");
+  const [lastMessage, setLastMessage] = useState<any>(null);
   
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -121,6 +122,7 @@ export function useVoiceWebSocket() {
 
         try {
           const msg = JSON.parse(event.data);
+          setLastMessage(msg);
 
           switch (msg.type) {
             case "state":
@@ -251,8 +253,8 @@ export function useVoiceWebSocket() {
     return () => disconnect();
   }, [connect, disconnect]);
 
-  return {
     socketState,
+    lastMessage,
     connect,
     disconnect,
     sendAudio,

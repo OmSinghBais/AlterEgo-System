@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { useVoiceWebSocket } from "@/hooks/useVoiceWebSocket";
 
 export default function MissionControlPage() {
-  const { status, lastMessage } = useVoiceWebSocket();
+  const { socketState, lastMessage } = useVoiceWebSocket();
   const [telemetry, setTelemetry] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({
     cpu: 12,
