@@ -1,0 +1,18 @@
+{
+  "name": "alterego-desktop",
+  "version": "1.0.0",
+  "description": "Always-On AlterEGO Desktop Overlay",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^30.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

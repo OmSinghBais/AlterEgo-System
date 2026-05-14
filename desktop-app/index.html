@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      margin: 0;
+      padding: 15px;
+      overflow: hidden;
+      font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: rgba(10, 15, 25, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 255, 255, 0.2);
+      border-radius: 12px;
+      color: white;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(0, 255, 255, 0.1);
+      -webkit-app-region: drag; /* Make it draggable */
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      -webkit-app-region: no-drag;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(0, 255, 255, 0.8);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00ffcc;
+      box-shadow: 0 0 5px #00ffcc;
+    }
+
+    .transcript {
+      font-size: 14px;
+      line-height: 1.4;
+      max-height: 60px;
+      overflow-y: auto;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .visualizer {
+      height: 20px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .bar {
+      flex: 1;
+      height: 2px;
+      background: #00ffcc;
+      transition: height 0.1s ease;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+
+    .listening {
+      animation: pulse 1s infinite;
+      color: #ff3366;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <div class="status-dot" id="dot"></div>
+        <span id="status-text">ALTEREGO ONLINE</span>
+      </div>
+      <div id="mode">CINEMATIC</div>
+    </div>
+
+    <div class="transcript" id="transcript">
+      Ready for your command...
+    </div>
+
+    <div class="visualizer" id="viz">
+      <div class="bar" style="height: 4px"></div>
+      <div class="bar" style="height: 10px"></div>
+      <div class="bar" style="height: 15px"></div>
+      <div class="bar" style="height: 8px"></div>
+      <div class="bar" style="height: 12px"></div>
+      <div class="bar" style="height: 4px"></div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+    const transcriptEl = document.getElementById('transcript');
+    const statusTextEl = document.getElementById('status-text');
+    const dotEl = document.getElementById('dot');
+
+    ipcRenderer.on('backend-msg', (event, msg) => {
+      if (msg.type === 'token') {
+        if (msg.done) {
+          // Keep transcript or clear after delay
+        } else {
+          if (transcriptEl.innerText === 'Ready for your command...') transcriptEl.innerText = '';
+          transcriptEl.innerText += msg.content;
+        }
+      }
+
+      if (msg.type === 'transcript_user') {
+        transcriptEl.innerHTML = `<span style="color: rgba(255,255,255,0.5)">You:</span> ${msg.text}`;
+      }
+
+      if (msg.type === 'state') {
+        statusTextEl.innerText = msg.state.toUpperCase();
+        if (msg.state === 'listening') {
+          dotEl.style.background = '#ff3366';
+          dotEl.style.boxShadow = '0 0 10px #ff3366';
+        } else {
+          dotEl.style.background = '#00ffcc';
+          dotEl.style.boxShadow = '0 0 10px #00ffcc';
+        }
+      }
+    });
+
+    ipcRenderer.on('status', (event, status) => {
+      if (status === 'connected') {
+        statusTextEl.innerText = 'SYSTEM LINKED';
+      }
+    });
+  </script>
+</body>
+</html>
