@@ -4,7 +4,7 @@ import time
 import asyncio
 from typing import AsyncGenerator, List, Dict, Any
 
-from core.settings import get_settings
+from config.settings import get_settings
 from core.logger import logger, log_latency, log_token_usage
 from personality import get_mode, DEFAULT_MODE
 from memory import get_context_messages, append_message, score_importance, summarize_history
@@ -22,77 +22,65 @@ def get_client():
     global _client
     if _client is None:
         from openai import AsyncOpenAI
-        _client = AsyncOpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_BASE_URL if settings.OPENAI_BASE_URL else None
-        )
+        
+        api_key = settings.OPENAI_API_KEY or "ollama"
+        base_url = settings.OPENAI_BASE_URL or settings.OLLAMA_BASE_URL
+        
+        if "localhost:11434" in base_url and not base_url.endswith("/v1"):
+            base_url += "/v1"
+
+        logger.info(f"🔌 LLM Link: {base_url}")
+        _client = AsyncOpenAI(api_key=api_key, base_url=base_url)
     return _client
 
+def get_model():
+    client = get_client()
+    if client.base_url and "localhost:11434" in str(client.base_url):
+        return "llama3.1"
+    return settings.OPENAI_MODEL
+
 async def stream_response(user_text: str, mode_name: str = "cinematic") -> AsyncGenerator[str, None]:
-    """
-    Main LLM entrance. Handles:
-    1. RAG (Semantic Memory Retrieval)
-    2. Tool Selection
-    3. Tool Execution Loop
-    4. Response Streaming & Token Tracking
-    """
     t0 = time.perf_counter()
     client = get_client()
     mode = get_mode(mode_name)
     
-    # 1. Advanced Context Assembly (RAG + Graph + Facts)
-    # Extract entities from the current query to pull the right graph nodes
-    entities = await extract_entities(user_text)
-    active_names = []
-    for names in entities.values():
-        active_names.extend(names)
-    
-    memory_ctx = assemble_context(user_text, active_entities=active_names)
+    memory_ctx = assemble_context(user_text)
 
-    # 2. Prepare Messages
     system_prompt = mode.system_prompt
     if memory_ctx:
         system_prompt += f"\n\n[AUGMENTED CONTEXT]\n{memory_ctx}"
     
     messages = [{"role": "system", "content": system_prompt}]
     
-    history = get_context_messages(max_messages=20)
-    if len(history) > 15:
-        summary = await summarize_history(history[:-5])
-        messages.append({"role": "system", "content": f"[CONVERSATION SUMMARY]\n{summary}"})
-        messages.extend(history[-5:])
-    else:
-        messages.extend(history)
-        
+    history = get_context_messages(max_messages=10)
+    messages.extend(history)
     messages.append({"role": "user", "content": user_text})
 
-    # 3. Get Tools
     available_tools = registry.to_openai_tools()
 
-    # 4. First LLM Pass
     try:
+        use_tools = available_tools and "localhost:11434" not in str(client.base_url)
+        
         response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model=get_model(),
             messages=messages,
-            tools=available_tools if available_tools else None,
-            tool_choice="auto" if available_tools else None,
+            tools=available_tools if use_tools else None,
+            tool_choice="auto" if use_tools else None,
             stream=True,
-            stream_options={"include_usage": True} # Track tokens
+            stream_options={"include_usage": True}
         )
 
         full_content = ""
         tool_calls = []
 
         async for chunk in response:
-            # Handle Usage (last chunk usually)
             if hasattr(chunk, 'usage') and chunk.usage:
-                log_token_usage(settings.OPENAI_MODEL, chunk.usage.prompt_tokens, chunk.usage.completion_tokens)
+                log_token_usage(get_model(), chunk.usage.prompt_tokens, chunk.usage.completion_tokens)
             
             if not chunk.choices: continue
             
             delta = chunk.choices[0].delta
             
-            # Handle Tool Calls
             if delta.tool_calls:
                 for tc_delta in delta.tool_calls:
                     if len(tool_calls) <= tc_delta.index:
@@ -107,19 +95,13 @@ async def stream_response(user_text: str, mode_name: str = "cinematic") -> Async
                     if tc_delta.function.arguments:
                         tool_calls[tc_delta.index]["function"]["arguments"] += tc_delta.function.arguments
 
-            # Handle Content
             if delta.content:
                 full_content += delta.content
                 yield delta.content
 
-        # 5. Execute Tools if requested
         if tool_calls:
-            logger.info(f"🛠️ Tool calls detected: {[tc['function']['name'] for tc in tool_calls]}")
-            
-            messages.append({
-                "role": "assistant",
-                "tool_calls": tool_calls
-            })
+            logger.info(f"🛠️ Tool calls: {[tc['function']['name'] for tc in tool_calls]}")
+            messages.append({"role": "assistant", "tool_calls": tool_calls})
 
             for tc in tool_calls:
                 name = tc["function"]["name"]
@@ -129,7 +111,6 @@ async def stream_response(user_text: str, mode_name: str = "cinematic") -> Async
                     args = {}
                 
                 result = await execute_tool(name, args)
-                
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
@@ -137,9 +118,8 @@ async def stream_response(user_text: str, mode_name: str = "cinematic") -> Async
                     "content": json.dumps(result)
                 })
 
-            # Second LLM Pass
             final_response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
+                model=get_model(),
                 messages=messages,
                 stream=True,
                 stream_options={"include_usage": True}
@@ -147,7 +127,7 @@ async def stream_response(user_text: str, mode_name: str = "cinematic") -> Async
 
             async for chunk in final_response:
                 if hasattr(chunk, 'usage') and chunk.usage:
-                    log_token_usage(settings.OPENAI_MODEL, chunk.usage.prompt_tokens, chunk.usage.completion_tokens)
+                    log_token_usage(get_model(), chunk.usage.prompt_tokens, chunk.usage.completion_tokens)
                 
                 if not chunk.choices: continue
                 content = chunk.choices[0].delta.content
@@ -155,16 +135,11 @@ async def stream_response(user_text: str, mode_name: str = "cinematic") -> Async
                     full_content += content
                     yield content
 
-        # 6. Post-processing
-        elapsed = (time.perf_counter() - t0) * 1000
-        log_latency("llm_stream", elapsed)
-        
         importance = score_importance(user_text)
-        append_message("user", user_text, importance)
-        append_message("assistant", full_content, score_importance(full_content))
+        await append_message("user", user_text, importance)
+        await append_message("assistant", full_content, score_importance(full_content))
         
-        # Trigger background reflection to update graph
-        start_reflection_loop()
+        await start_reflection_loop()
 
     except Exception as e:
         logger.error(f"LLM Error: {e}")

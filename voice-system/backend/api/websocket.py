@@ -101,11 +101,18 @@ async def _tts_and_send(ws: WebSocket, text: str, interrupted: dict) -> None:
     if interrupted.get("flag"):
         return
     try:
+        from tts.engine import synthesize_streaming
         loop = asyncio.get_event_loop()
-        audio = await loop.run_in_executor(None, synthesize, text)
-        if not interrupted.get("flag") and audio:
-            await safe_send(ws, audio)
-            await bus.emit(TTS_FINISHED, {"bytes": len(audio)})
+        
+        # Use generator to stream chunks immediately to WebSocket
+        gen = synthesize_streaming(text)
+        for chunk in gen:
+            if interrupted.get("flag"):
+                break
+            if chunk:
+                await safe_send(ws, chunk)
+                
+        await bus.emit(TTS_FINISHED, {"text_length": len(text)})
     except Exception as e:
         await handle_tts_error(e)
 
@@ -119,7 +126,14 @@ async def voice_ws_handler(ws: WebSocket):
 
     try:
         while True:
-            raw = await ws.receive()
+            try:
+                raw = await ws.receive()
+            except RuntimeError:
+                # Occurs if the connection is already marked as closed by the server
+                break
+
+            if raw["type"] == "websocket.disconnect":
+                break
 
             if "text" in raw:
                 data = json.loads(raw["text"])
@@ -158,7 +172,7 @@ async def voice_ws_handler(ws: WebSocket):
                 else:
                     await safe_send(ws, {"type": "state", "state": "idle"})
 
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
         connected_clients.discard(ws)

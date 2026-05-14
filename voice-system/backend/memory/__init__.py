@@ -4,7 +4,7 @@ from typing import Any, List, Dict
 from sqlalchemy.orm import Session
 from db.database import SessionLocal, engine, Base
 from db.models import Conversation, LongTermMemory, UserFact, SystemEvent
-from core.settings import get_settings
+from config.settings import get_settings
 from core.logger import logger
 from jobs.queue import enqueue_job
 from utils.embeddings import get_embedding, cosine_similarity
@@ -19,16 +19,18 @@ def get_db():
 
 # ── Conversation History ──────────────────────────────────────────────
 
-def append_message(role: str, content: str, importance: float = 0.5):
+async def append_message(role: str, content: str, importance: float = 0.5):
     db = get_db()
     try:
         msg = Conversation(role=role, content=content, timestamp=time.time(), importance=importance)
         db.add(msg)
         db.commit()
         
-        # Consolidation: If importance is very high, move to long-term immediately
-        if importance > 0.8:
-            enqueue_job(consolidate_to_long_term, content, importance)
+        # 🧠 Intelligence: If importance is high, run deep consolidation
+        if importance > 0.7:
+            from memory.consolidation import extract_and_store_facts
+            # Run extraction in the background (using job queue if available, or simple thread)
+            await enqueue_job(extract_and_store_facts, content)
             
     finally:
         db.close()
@@ -150,15 +152,16 @@ def log_system_event(event_type: str, data: dict = None):
 
 async def summarize_history(messages: List[Dict[str, str]]) -> str:
     """Generate a concise summary of the conversation context."""
-    from llm import get_client
+    from llm import get_client, get_model
     client = get_client()
+    model = get_model()
     
     text_to_summarize = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
     prompt = f"Summarize the following conversation context in 2-3 sentences, focusing on key facts and user preferences:\n\n{text_to_summarize}"
     
     try:
         response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model=model,
             messages=[{"role": "system", "content": "You are a memory consolidation engine."},
                       {"role": "user", "content": prompt}],
             max_tokens=150

@@ -41,6 +41,15 @@ async def analyze_screen(query: str, image_path: str = None) -> str:
 
     base64_image = encode_image(path)
     
+    # 🛰️ Check if we should offload to Modal Cloud
+    if settings.USE_MODAL_VISION:
+        from modal_bridge.bridge import call_modal_vision
+        logger.info("🛰️ Offloading vision analysis to Modal GPU...")
+        result = call_modal_vision(base64_image, query)
+        if result:
+            return result
+        logger.warning("🛰️ Modal failed, falling back to local vision...")
+
     try:
         response = await client.chat.completions.create(
             model="gpt-4o", # Vision capable model

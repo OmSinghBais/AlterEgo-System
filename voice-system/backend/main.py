@@ -15,6 +15,19 @@ import orjson
 
 settings = get_settings()
 
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            traces_sample_rate=1.0,
+            environment=settings.ENVIRONMENT,
+        )
+        logger.info("📡 Sentry initialized for backend.")
+    except ImportError:
+        logger.warning("⚠️ sentry-sdk not installed — skipping error tracking.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 AlterEGO Backend Starting...")
@@ -24,6 +37,10 @@ async def lifespan(app: FastAPI):
     await loop.run_in_executor(None, get_whisper)
     subsystem_status["stt"] = "online"
 
+    # 🧠 Warm up Intelligence
+    from utils.embeddings import get_embedding_model
+    get_embedding_model() # Pre-load heavy weights
+    
     # Start telemetry bridge
     asyncio.create_task(telemetry_bridge())
 

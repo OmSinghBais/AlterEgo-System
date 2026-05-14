@@ -33,8 +33,8 @@ async def chat_endpoint(req: ChatRequest):
             full_response += chunk
         
         importance = score_importance(req.message)
-        append_message("user", req.message, importance=importance)
-        append_message("assistant", full_response)
+        await append_message("user", req.message, importance=importance)
+        await append_message("assistant", full_response)
         
         return {"response": full_response}
     except Exception as e:
@@ -66,8 +66,8 @@ async def voice_endpoint(audio: UploadFile = File(...), mode: str = DEFAULT_MODE
             full_response += chunk
             
         importance = score_importance(user_text)
-        append_message("user", user_text, importance=importance)
-        append_message("assistant", full_response)
+        await append_message("user", user_text, importance=importance)
+        await append_message("assistant", full_response)
         
         return {
             "transcript": user_text,

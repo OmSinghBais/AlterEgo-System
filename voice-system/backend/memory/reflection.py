@@ -1,53 +1,54 @@
 import asyncio
 import time
-from typing import List
-from memory.knowledge_graph import kg
-from memory.entity_extractor import extract_entities
-from core.logger import logger
+from typing import List, Dict
 from db.database import SessionLocal
-from db.models import Conversation
+from db.models import Conversation, LongTermMemory, Goal
+from core.logger import logger
 
-async def reflect_on_recent_conversations(limit: int = 20):
-    """
-    Background process to analyze recent chat history, 
-    extract new entities, and update the knowledge graph.
-    """
-    logger.info("🧠 Memory Reflection Cycle Started...")
-    
-    db = SessionLocal()
-    try:
-        # Get recent messages that haven't been processed into graph yet (simple timestamp filter for now)
-        msgs = db.query(Conversation).order_by(Conversation.id.desc()).limit(limit).all()
-        
-        for msg in reversed(msgs):
-            if msg.role == "user":
-                # 1. Extract entities
-                entities = await extract_entities(msg.content)
-                
-                # 2. Update Graph
-                for cat, names in entities.items():
-                    for name in names:
-                        kg.add_entity(name, cat)
-                        
-                # 3. Simple relationship guessing (heuristic)
-                # If a project and a technology are mentioned in the same message, link them
-                projs = entities.get("projects", [])
-                techs = entities.get("technologies", [])
-                for p in projs:
-                    for t in techs:
-                        kg.add_relationship(p, t, "USES")
-                        kg.add_relationship("Om", p, "WORKS_ON")
-        
-        # 4. Save the evolved graph
-        kg.save()
-        logger.info("✨ Memory Reflection Cycle Complete.")
-        
-    except Exception as e:
-        logger.error(f"Reflection failed: {e}")
-    finally:
-        db.close()
+class ReflectionEngine:
+    def __init__(self):
+        self.last_reflection_time = time.time()
 
-def start_reflection_loop():
-    """Triggered periodically or manually."""
-    from jobs.queue import enqueue_job
-    enqueue_job(reflect_on_recent_conversations)
+    async def run_reflection_cycle(self):
+        """Analyze system state and suggest updates."""
+        logger.info("🕵️ Self-Reflection Engine cycle started.")
+        
+        # 1. Analyze Task Success/Failure
+        await self.analyze_recent_performance()
+        
+        # 2. Update Long-Term Goal Progress
+        await self.update_goal_progress()
+        
+        # 3. Consolidate Learnings
+        await self.consolidate_learnings()
+
+    async def analyze_recent_performance(self):
+        """Check for negative feedback and identify root causes."""
+        db = SessionLocal()
+        try:
+            failed = db.query(Conversation).filter(Conversation.feedback < 0).limit(5).all()
+            for f in failed:
+                logger.warning(f"⚠️ Learning from failure: {f.content[:50]}...")
+                # In Module 9, this would trigger a deep analysis agent
+        finally:
+            db.close()
+
+    async def update_goal_progress(self):
+        """Reflect on active goals and update their progress bar."""
+        db = SessionLocal()
+        try:
+            active_goals = db.query(Goal).filter(Goal.status == "active").all()
+            for goal in active_goals:
+                # Mock progress update
+                goal.progress = min(1.0, goal.progress + 0.05)
+                logger.info(f"📊 Goal '{goal.title}' progress: {goal.progress*100:.1f}%")
+            db.commit()
+        finally:
+            db.close()
+
+    async def consolidate_learnings(self):
+        """Turn ephemeral insights into permanent cognitive patterns."""
+        # TODO: Move successful plans into 'Workflow Templates'
+        pass
+
+reflection_engine = ReflectionEngine()

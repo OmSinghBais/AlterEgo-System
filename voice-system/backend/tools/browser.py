@@ -1,56 +1,90 @@
+import asyncio
 from playwright.async_api import async_playwright
-from tools.registry import registry, PERMISSION_AUTO, PERMISSION_CONFIRM
-from core.logger import logger
-from pathlib import Path
-import time
+from tools.registry import registry, PERMISSION_AUTO
+from utils.logger import logger
 
-SCREENSHOT_DIR = Path(__file__).resolve().parent.parent / "data" / "screenshots"
-SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+class BrowserTool:
+    def __init__(self):
+        self.pw = None
+        self.browser = None
+        self.context = None
+
+    async def start(self):
+        if not self.browser:
+            self.pw = await async_playwright().start()
+            self.browser = await self.pw.chromium.launch(headless=True)
+            self.context = await self.browser.new_context(
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            )
+            logger.info("🌐 Browser Agent initialized.")
+
+    async def close(self):
+        if self.browser:
+            await self.browser.close()
+            await self.pw.stop()
+            self.browser = None
+            logger.info("🌐 Browser Agent shut down.")
+
+    async def search(self, query: str) -> str:
+        """Search the web using DuckDuckGo."""
+        await self.start()
+        page = await self.context.new_page()
+        try:
+            await page.goto(f"https://duckduckgo.com/html/?q={query}")
+            # Wait for results
+            results = await page.query_selector_all(".result__body")
+            texts = []
+            for r in results[:5]:
+                title = await r.query_selector(".result__title")
+                snippet = await r.query_selector(".result__snippet")
+                if title and snippet:
+                    texts.append(f"Title: {await title.inner_text()}\nSnippet: {await snippet.inner_text()}\n")
+            return "\n".join(texts) or "No results found."
+        finally:
+            await page.close()
+
+    async def scrape(self, url: str) -> str:
+        """Scrape a website and return text content."""
+        await self.start()
+        page = await self.context.new_page()
+        try:
+            await page.goto(url, wait_until="networkidle")
+            # Basic text extraction
+            content = await page.evaluate("() => document.body.innerText")
+            return content[:5000] # Limit for context
+        finally:
+            await page.close()
+
+browser_tool = BrowserTool()
 
 @registry.register(
-    name="browser_operator",
-    description="Perform advanced browser operations like scraping, screenshots, and element interaction.",
+    name="browser_search",
+    description="Search the web for information using a browser.",
     parameters={
         "type": "object",
         "properties": {
-            "url": {"type": "string", "description": "The URL to visit"},
-            "action": {"type": "string", "enum": ["scrape", "screenshot", "find_elements"], "default": "scrape"},
-            "selector": {"type": "string", "description": "CSS selector for specific element interaction"}
+            "query": {"type": "string", "description": "The search query."}
+        },
+        "required": ["query"]
+    },
+    permission=PERMISSION_AUTO,
+    tags=["browser", "research"]
+)
+async def browser_search(query: str) -> str:
+    return await browser_tool.search(query)
+
+@registry.register(
+    name="browser_scrape",
+    description="Visit a URL and extract text content.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "The URL to visit."}
         },
         "required": ["url"]
     },
     permission=PERMISSION_AUTO,
-    tags=["browser", "automation"]
+    tags=["browser", "research"]
 )
-async def browser_operator(url: str, action: str = "scrape", selector: str = None) -> str:
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
-        page = await context.new_page()
-        
-        try:
-            await page.goto(url, timeout=15000, wait_until="networkidle")
-            
-            if action == "screenshot":
-                filename = f"shot_{int(time.time())}.png"
-                path = SCREENSHOT_DIR / filename
-                await page.screenshot(path=str(path), full_page=True)
-                await browser.close()
-                return f"Screenshot saved to: {path}"
-            
-            elif action == "find_elements":
-                if not selector: return "Error: Selector required for find_elements"
-                elements = await page.query_selector_all(selector)
-                results = [await e.inner_text() for e in elements]
-                await browser.close()
-                return f"Found {len(results)} elements matching '{selector}': {results[:5]}"
-            
-            else: # scrape
-                content = await page.evaluate("document.body.innerText")
-                await browser.close()
-                return f"Content extracted from {url}:\n{content[:3000]}..."
-                
-        except Exception as e:
-            await browser.close()
-            logger.error(f"Browser operation failed: {e}")
-            return f"Browser Error: {e}"
+async def browser_scrape(url: str) -> str:
+    return await browser_tool.scrape(url)
