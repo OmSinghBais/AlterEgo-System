@@ -92,5 +92,15 @@ export function useAudioAnalyser() {
     };
   }, []);
 
-  return { attachAudio, getEnergy, getBass };
+  /** Get raw frequency data array for visualisation. */
+  const getFrequencies = useCallback((): Uint8Array<ArrayBuffer> | null => {
+    const analyser = analyserRef.current;
+    const data = dataRef.current;
+    if (!analyser || !data) return null;
+
+    analyser.getByteFrequencyData(data);
+    return data;
+  }, []);
+
+  return { attachAudio, getEnergy, getBass, getFrequencies };
 }
