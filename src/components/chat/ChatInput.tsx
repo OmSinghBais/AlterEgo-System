@@ -50,20 +50,10 @@ export default function ChatInput() {
           type="button"
           onClick={handleSubmit}
           disabled={!text.trim() || busy}
-          whileHover={{ scale: 1.1, filter: "brightness(1.2)" }}
-          whileTap={{ scale: 0.9 }}
-          className="relative flex size-9 items-center justify-center rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-20 disabled:grayscale"
+          whileTap={{ scale: 0.95 }}
+          className="relative flex size-9 items-center justify-center rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20 disabled:opacity-20 disabled:grayscale"
         >
           <Send className="size-4" />
-          {/* Subtle pulse for the button when active */}
-          {!busy && text.trim() && (
-            <motion.span 
-              layoutId="glow"
-              className="absolute inset-0 rounded-lg bg-cyan-400 blur-md -z-10"
-              animate={{ opacity: [0.2, 0.5, 0.2] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            />
-          )}
         </motion.button>
       </div>
     </div>

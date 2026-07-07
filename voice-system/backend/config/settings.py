@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     WS_HOST: str = "0.0.0.0"
     WS_PORT: int = 8000
     PORT: Optional[int] = None
-    FRONTEND_URL: str = "http://localhost:3001"
+    FRONTEND_URL: str = "https://alter-ego-system-7pnm.vercel.app"
     
     # AI Models
     OPENAI_MODEL: str = "gpt-4o"
@@ -44,9 +44,10 @@ class Settings(BaseSettings):
     
     # Wake Word
     ENABLE_WAKEWORD: bool = True
-    WAKEWORD_MODELS: List[str] = ["hey_jarvis_v0.1"]
-    WAKEWORD_THRESHOLD: float = 0.5
-    WAKEWORD_COOLDOWN: float = 2.0
+    WAKEWORD_ENGINE: str = "openwakeword" # choices: "openwakeword", "porcupine"
+    WAKEWORD_MODELS: List[str] = ["hey_jarvis_v0.1", "alexa", "hey_mycroft"]
+    WAKEWORD_THRESHOLD: float = 0.25
+    WAKEWORD_COOLDOWN: float = 1.5
     
     # Agent & Memory Settings
     MAX_CONTEXT_MESSAGES: int = 20

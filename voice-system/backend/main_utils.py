@@ -1,9 +1,10 @@
 import threading
 import time
-import subprocess
 import asyncio
 import orjson
-from utils.logger import logger, log_ws_event
+import numpy as np
+import pyaudio
+from utils.logger import logger
 from config.settings import get_settings
 from api.state import subsystem_status, conversation_active, connected_clients
 
@@ -12,82 +13,82 @@ settings = get_settings()
 def start_wakeword_thread():
     threading.Thread(target=_wakeword_listener, daemon=True).start()
 
+async def broadcast_wake_word(keyword: str):
+    msg = orjson.dumps({
+        "type": "wake_word_detected",
+        "keyword": keyword,
+        "timestamp": time.time()
+    })
+    for ws in list(connected_clients):
+        try:
+            await ws.send_bytes(msg)
+        except Exception:
+            connected_clients.discard(ws)
+
 def _wakeword_listener():
-    import sounddevice as sd
-    import numpy as np
-    try:
-        import pvporcupine
-    except ImportError:
-        logger.warning("pvporcupine not installed — wake word disabled.")
-        return
-
-    if not settings.PICOVOICE_API_KEY:
-        logger.warning("PICOVOICE_API_KEY missing — wake word disabled.")
+    if not settings.ENABLE_WAKEWORD:
         return
 
     try:
-        # Use built-in keywords or custom ones if available
-        # Defaulting to 'jarvis' or 'computer' or 'porcupine'
-        keywords = ["jarvis", "computer"] if "jarvis" in pvporcupine.KEYWORDS else ["porcupine"]
-        handle = pvporcupine.create(access_key=settings.PICOVOICE_API_KEY, keywords=keywords)
-        logger.info(f"Picovoice Porcupine loaded with keywords: {keywords}")
-    except Exception as e:
-        logger.error(f"Failed to initialize Porcupine: {e}")
-        return
+        from openwakeword.model import Model
+        model_paths = settings.WAKEWORD_MODELS
+        model = Model(wakeword_models=model_paths, inference_framework="onnx")
+        logger.info(f"🎙️ OpenWakeWord Online (PyAudio) | Threshold: {settings.WAKEWORD_THRESHOLD}")
 
-    subsystem_status["wakeword"] = "online"
-    last_trigger = 0.0
-    WAKEWORD_COOLDOWN = 2.0 # Default cooldown
-
-    async def broadcast_wake_word(keyword: str):
-        msg = orjson.dumps({
-            "type": "wake_word_detected",
-            "keyword": keyword,
-            "timestamp": time.time()
-        })
-        for ws in list(connected_clients):
-            try:
-                await ws.send_bytes(msg)
-            except Exception:
-                connected_clients.discard(ws)
-
-    def on_audio(indata, frames, time_info, status):
-        nonlocal last_trigger
-        if conversation_active:
+        p = pyaudio.PyAudio()
+        
+        # Diagnostic: Log default device
+        try:
+            default_device = p.get_default_input_device_info()
+            logger.info(f"🎙️ Using Default Mic: {default_device['name']}")
+        except:
+            logger.error("🎙️ No default input device found!")
             return
 
-        # Porcupine expects int16
-        audio_int16 = (indata.flatten() * 32768).astype(np.int16)
-        result = handle.process(audio_int16)
-
-        if result >= 0:
-            now = time.time()
-            if now - last_trigger < WAKEWORD_COOLDOWN:
-                return
-            last_trigger = now
-            
-            keyword = keywords[result]
-            logger.info(f"🔥 Wake word detected: {keyword}")
-
-            # Trigger broadcast in main loop
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.run_coroutine_threadsafe(broadcast_wake_word(keyword), loop)
-            except Exception as e:
-                logger.error(f"Failed to broadcast wake word: {e}")
-
-    try:
-        with sd.InputStream(
-            samplerate=handle.sample_rate,
+        stream = p.open(
+            format=pyaudio.paFloat32,
             channels=1,
-            dtype="float32",
-            blocksize=handle.frame_length,
-            callback=on_audio,
-        ):
-            while True:
+            rate=16000,
+            input=True,
+            frames_per_buffer=1280
+        )
+
+        last_vol_log = 0
+
+        while True:
+            if conversation_active:
+                time.sleep(0.5)
+                continue
+            
+            try:
+                data = stream.read(1280, exception_on_overflow=False)
+                audio_data = np.frombuffer(data, dtype=np.float32)
+                
+                # Volume Diagnostic
+                now = time.time()
+                if now - last_vol_log > 3.0:
+                    vol = np.abs(audio_data).mean()
+                    logger.debug(f"🎙️ Mic Check | Vol: {vol:.4f}")
+                    last_vol_log = now
+
+                model.predict(audio_data)
+                
+                for mdl, score in model.prediction_buffer.items():
+                    if score[-1] >= settings.WAKEWORD_THRESHOLD:
+                        logger.info(f"🔥 WAKE WORD DETECTED: {mdl} ({score[-1]:.2f})")
+                        _trigger_broadcast(mdl)
+                        model.reset()
+            except Exception as e:
+                logger.error(f"Stream read error: {e}")
                 time.sleep(0.1)
+
     except Exception as e:
-        logger.error(f"Audio stream error: {e}")
-    finally:
-        handle.delete()
+        logger.error(f"Wake word error: {e}")
+
+def _trigger_broadcast(keyword: str):
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(broadcast_wake_word(keyword), loop)
+    except Exception as e:
+        logger.error(f"Broadcast error: {e}")

@@ -4,6 +4,7 @@ import { Geist_Mono } from "next/font/google";
 import WakeWordProvider from "@/components/layout/WakeWordProvider";
 import VoiceManager from "@/components/voice/VoiceManager";
 import { Toaster } from "@/components/ui/sonner";
+import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import "./globals.css";
 
 const fontInter = localFont({
@@ -47,9 +48,19 @@ export default function RootLayout({
       className={`dark ${fontInter.variable} ${fontOrbitron.variable} ${fontSpaceGrotesk.variable} ${geistMono.variable} h-full bg-[#050a0e] antialiased`}
     >
       <body className="flex min-h-full flex-col bg-transparent font-[family-name:var(--font-inter)] text-white">
-        <WakeWordProvider>{children}</WakeWordProvider>
-        <VoiceManager />
-        <Toaster theme="dark" position="bottom-right" closeButton richColors />
+        <ErrorBoundary
+          onError={(error, info) => {
+            // Send to monitoring service
+            console.error('Layout error:', error);
+            if (typeof window !== 'undefined' && window.Sentry) {
+              window.Sentry.captureException(error, { contexts: { react: { info } } });
+            }
+          }}
+        >
+          <WakeWordProvider>{children}</WakeWordProvider>
+          <VoiceManager />
+          <Toaster theme="dark" position="bottom-right" closeButton richColors />
+        </ErrorBoundary>
       </body>
     </html>
   );

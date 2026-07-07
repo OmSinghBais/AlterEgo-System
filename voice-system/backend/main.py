@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("🎙️ Wake-word listener disabled (Cloud Mode).")
 
+    if settings.ENVIRONMENT == "development":
+        threading.Thread(target=open_browser, daemon=True).start()
+
     logger.info("✅ All systems online.")
     yield
     logger.info("🛑 Shutting down.")
@@ -64,11 +67,24 @@ app = FastAPI(
 # Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://alter-ego-system-7pnm.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:3001"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def open_browser():
+    """Open the frontend in the default browser."""
+    import webbrowser
+    import time
+    time.sleep(2) # Wait for server to be fully ready
+    url = f"{settings.FRONTEND_URL}/dashboard"
+    logger.info(f"🌐 Opening dashboard: {url}")
+    webbrowser.open(url)
 
 # Routes
 @app.get("/")
@@ -88,25 +104,27 @@ async def voice_ws(ws: WebSocket):
 
 async def telemetry_bridge():
     """Listen for agent telemetry and broadcast to all connected WebSocket clients."""
-    r = redis.from_url(settings.REDIS_URL)
-    pubsub = r.pubsub()
-    await pubsub.subscribe("agent_telemetry")
-    
-    logger.info("🛰️ Telemetry bridge active.")
     try:
+        r = redis.from_url(settings.REDIS_URL)
+        pubsub = r.pubsub()
+        await pubsub.subscribe("agent_telemetry")
+        logger.info("🛰️ Telemetry bridge active.")
+        
         async for message in pubsub.listen():
             if message["type"] == "message":
                 data = message["data"]
-                # Broadcast to all connected clients
                 for ws in list(connected_clients):
                     try:
                         await ws.send_bytes(data)
                     except Exception:
                         connected_clients.discard(ws)
     except Exception as e:
-        logger.error(f"Telemetry bridge error: {e}")
+        logger.warning(f"Telemetry bridge (Redis) unavailable: {e}")
     finally:
-        await pubsub.unsubscribe("agent_telemetry")
+        try:
+            await pubsub.unsubscribe("agent_telemetry")
+        except:
+            pass
 
 if __name__ == "__main__":
     import uvicorn

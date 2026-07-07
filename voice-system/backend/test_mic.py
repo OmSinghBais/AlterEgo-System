@@ -1,32 +1,23 @@
-"""Task 5 — Test microphone access."""
-
 import sounddevice as sd
 import numpy as np
 
-DURATION = 3  # seconds
-SAMPLE_RATE = 16000
+def list_devices():
+    print("Available Audio Devices:")
+    print(sd.query_devices())
+    print(f"\nDefault Input Device: {sd.default.device[0]}")
 
-print("🎤 Recording for 3 seconds...")
-print(f"   Sample rate: {SAMPLE_RATE} Hz")
-print(f"   Channels: 1 (mono)\n")
+def monitor_mic():
+    print("\nMonitoring Default Mic (Ctrl+C to stop)...")
+    def callback(indata, frames, time, status):
+        volume_norm = np.linalg.norm(indata) * 10
+        print(f"|{'#' * int(volume_norm)}", end='\r')
 
-recording = sd.rec(
-    int(DURATION * SAMPLE_RATE),
-    samplerate=SAMPLE_RATE,
-    channels=1,
-    dtype="float32",
-)
-sd.wait()
+    try:
+        with sd.InputStream(callback=callback, channels=1):
+            sd.sleep(100000)
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
-peak = float(np.max(np.abs(recording)))
-rms = float(np.sqrt(np.mean(recording**2)))
-
-print(f"✅ Recording complete!")
-print(f"   Samples: {recording.shape[0]}")
-print(f"   Peak level: {peak:.4f}")
-print(f"   RMS level: {rms:.4f}")
-
-if peak < 0.001:
-    print("\n⚠️  Very low audio — check mic permissions or input device.")
-else:
-    print("\n🎙️  Microphone is working!")
+if __name__ == "__main__":
+    list_devices()
+    monitor_mic()

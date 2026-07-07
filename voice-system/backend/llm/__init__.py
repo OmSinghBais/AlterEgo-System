@@ -23,8 +23,13 @@ def get_client():
     if _client is None:
         from openai import AsyncOpenAI
         
-        api_key = settings.OPENAI_API_KEY or "ollama"
-        base_url = settings.OPENAI_BASE_URL or settings.OLLAMA_BASE_URL
+        # Priority: OpenAI Cloud (if key exists) > Local Ollama
+        if settings.OPENAI_API_KEY:
+            api_key = settings.OPENAI_API_KEY
+            base_url = settings.OPENAI_BASE_URL or "https://api.openai.com/v1"
+        else:
+            api_key = "ollama"
+            base_url = settings.OLLAMA_BASE_URL
         
         if "localhost:11434" in base_url and not base_url.endswith("/v1"):
             base_url += "/v1"
@@ -34,10 +39,7 @@ def get_client():
     return _client
 
 def get_model():
-    client = get_client()
-    if client.base_url and "localhost:11434" in str(client.base_url):
-        return "llama3.1"
-    return settings.OPENAI_MODEL
+    return settings.OPENAI_MODEL or "llama3"
 
 async def stream_response(user_text: str, mode_name: str = "cinematic") -> AsyncGenerator[str, None]:
     t0 = time.perf_counter()
